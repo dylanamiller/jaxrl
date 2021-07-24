@@ -1,5 +1,7 @@
 import time
 
+from scipy.stats import entropy
+
 import jax.numpy as jnp
 from jax import grad, jit
 
@@ -22,9 +24,10 @@ class NPG(PGBase):
         self.damping = damping
 
     def act(self, obs, action=None):
-        
+        logits = self.approx(obs)
+        action, log_prob = self.policy(logits)
 
-        return action, log_prob, entropy
+        return action, logits.log_prob, entropy(logits)
 
     def cpi_surrogate(self, observations, actions, advantages):
         """conservative policy iteration to limit policy update
@@ -44,7 +47,7 @@ class NPG(PGBase):
         return surr
 
     def flat_vpg(self, observations, actions, advantages):
-        cpi_surr = self.cpi_surrogate(observations, actions, advantages)
+        cpi_surr = grad(self.cpi_surrogate)(observations, actions, advantages)
         vpg_grad = grad(cpi_surr, self.approx.trainable_params)
         vpg_grad = jnp.concatenate([g.contiguous().view(-1).data.numpy() for g in vpg_grad])
         return vpg_grad
